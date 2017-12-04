@@ -37,10 +37,10 @@ class uhd_power_measure(gr.top_block):
         ##################################################
         # Variables
         ##################################################
-        self.trans_width = trans_width = 1e6
-        self.samp_rate = samp_rate = 25
-        self.filt_stop_freq = filt_stop_freq = 6e6
-        self.filt_start_freq = filt_start_freq = -6e6
+        self.trans_width = trans_width = 0.25e6
+        self.samp_rate = samp_rate = 10
+        self.filt_stop_freq = filt_stop_freq = 1e6
+        self.filt_start_freq = filt_start_freq = -1e6
         self.atten = atten = 50
         self.taps = taps = firdes.complex_band_pass_2(1, samp_rate*1e6, filt_start_freq, filt_stop_freq, trans_width, atten)
         self.rx_gain = rx_gain 
@@ -69,7 +69,7 @@ class uhd_power_measure(gr.top_block):
         self.fft_filter_xxx_0.declare_sample_delay(0)
         self.blocks_nlog10_ff_0 = blocks.nlog10_ff(10, 1, 0)
         self.blocks_keep_one_in_n_0 = blocks.keep_one_in_n(gr.sizeof_float*1, int(measurement_interval*samp_rate*1e6))
-        self.blocks_head_0 = blocks.head(gr.sizeof_float*1, 1)
+        self.blocks_head_0 = blocks.head(gr.sizeof_gr_complex*1, samp_rate*1000000)
         self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_float*1, file_name, True)
         self.blocks_file_sink_0.set_unbuffered(False)
         self.blocks_complex_to_mag_squared_0 = blocks.complex_to_mag_squared(1)
@@ -78,13 +78,16 @@ class uhd_power_measure(gr.top_block):
         # Connections
         ##################################################
         self.connect((self.blocks_complex_to_mag_squared_0, 0), (self.single_pole_iir_filter_xx_0, 0))
-        self.connect((self.blocks_head_0, 0), (self.blocks_file_sink_0, 0))
+#        self.connect((self.blocks_head_0, 0), (self.blocks_file_sink_0, 0))
+        self.connect((self.blocks_nlog10_ff_0, 0), (self.blocks_file_sink_0, 0))
         self.connect((self.blocks_keep_one_in_n_0, 0), (self.blocks_nlog10_ff_0, 0))
-        self.connect((self.blocks_nlog10_ff_0, 0), (self.blocks_head_0, 0))
+ #       self.connect((self.blocks_nlog10_ff_0, 0), (self.blocks_head_0, 0))
         self.connect((self.fft_filter_xxx_0, 0), (self.blocks_complex_to_mag_squared_0, 0))
         self.connect((self.single_pole_iir_filter_xx_0, 0), (self.blocks_keep_one_in_n_0, 0))
-        self.connect((self.uhd_usrp_source_1, 0), (self.fft_filter_xxx_0, 0))
-
+#        self.connect((self.uhd_usrp_source_1, 0), (self.fft_filter_xxx_0, 0))
+        self.connect((self.uhd_usrp_source_1, 0),  (self.blocks_head_0, 0))
+        self.connect((self.blocks_head_0, 0), (self.fft_filter_xxx_0, 0))
+     
     def get_args(self):
         return self.args
 
@@ -172,7 +175,7 @@ if __name__ == '__main__':
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
     parser.add_option("-o", "--lo-offset", dest="lo_offset", type="eng_float", default=eng_notation.num_to_str(125e3),
         help="Set lo_offset frequency in Hz [default=%default]")
-    parser.add_option("-f", "--rx_freq", dest="rx_freq", type="eng_float", default=eng_notation.num_to_str(3100.0),             
+    parser.add_option("-f", "--rx_freq", dest="rx_freq", type="eng_float", default=eng_notation.num_to_str(3178.0),             
         help="Set receive frequency in MHz [default=%default]")
     parser.add_option("-g", "--rx-gain", dest="rx_gain", type="eng_float", default=eng_notation.num_to_str(50),
         help="Set rx_gain [default=%default]")
@@ -180,7 +183,7 @@ if __name__ == '__main__':
         help="Set usrp_addr [default=%default]")
     parser.add_option("-a", "--angle", dest="angle", type="eng_float", default=0.0,
         help="Set angle of turntable [default=%default]")
-    parser.add_option("-c", "--rssi-count", dest="measurement_interval", type="intx", default=1,
+    parser.add_option("-c", "--rssi-count", dest="measurement_interval", type="intx", default=0.9,
         help="Count of RSSI values to capture [default=%default]")
     parser.add_option("-F", "--file_name", dest="file_name", type="string",
                       default="rssi.f32",
@@ -198,14 +201,14 @@ if __name__ == '__main__':
 
     angle = options.angle
     
- #   servo = maestro.Controller()
- #   servo.setAccel(X_AXIS, ACCEL)
- #   servo.setSpeed(X_AXIS, SPEED)
- #   print( X_CENTER+(angle*TO_DEGREES))
- #   servo.setTarget(X_AXIS, int(X_CENTER+(angle*TO_DEGREES)))  
- #   wait_for_stop(X_AXIS)
- #   print(servo.getPosition(X_AXIS))
- #   servo.close                 
+    servo = maestro.Controller()
+    servo.setAccel(X_AXIS, ACCEL)
+    servo.setSpeed(X_AXIS, SPEED)
+    print( X_CENTER+(angle*TO_DEGREES))
+    servo.setTarget(X_AXIS, int(X_CENTER+(angle*TO_DEGREES)))  
+    wait_for_stop(X_AXIS)
+    print(servo.getPosition(X_AXIS))
+    servo.close                 
 
     # Fire up the flow graph to grab RSSI burst.
     tb = uhd_power_measure(lo_offset = options.lo_offset,
